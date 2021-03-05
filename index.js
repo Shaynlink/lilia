@@ -215,6 +215,36 @@ class Storage extends EventEmitter{
         return this;
     };
 
+    setData(data) {
+        // Enregistre dans le cache
+        this.cache = data;
+        this.fetch = false;
+
+        // on créer un hash des dernieres data sauvegarder
+        this.actualHash = crypto.createHash('sha256').update(JSON.stringify(this.cache)).digest('hex');
+        this.emit('debug', '[STORAGE %s] Data loaded, hash: %s', this.name, this.hash);
+
+        // Si l'écriture est toujours en cours alors retourner pour éviter une double écrite
+        if (this.check) return this;
+        // Mettre l'état d'écriture sur actif
+        this.check = true;
+        // On save le hash des données actuel
+        this.hash = this.actualHash;
+
+        // Ecrire le fichier
+        fs.writeFile(this.filePath, JSON.stringify(data), {encoding: 'utf8'}, () => {
+            // Mettre l'état d'écriture sur inactif
+            this.check = false;
+            this.emit('debug', '[STORAGE %s] Data saved, hash: %s', this.name, this.hash);
+            // Vérifier si les données save on pas était update entre temp, si oui alors recommencer le processus
+            if (this.hash != this.actualHash) return this.saveData(this.cache);
+            // faire une backup
+            this.makeBackup();
+        });
+
+        return this;
+    };
+
     makeBackup() {
         try {
             // Utilisation basique
